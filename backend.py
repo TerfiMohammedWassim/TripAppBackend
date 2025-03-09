@@ -1,4 +1,5 @@
 from flask import Flask, request, jsonify
+import json
 
 app = Flask(__name__)
 
@@ -9,10 +10,18 @@ def home():
 @app.route('/solve', methods=['POST'])
 def solve():
     data = request.get_json()
-    starting_city = data.get('StartingCity')
     print(data)
-    print(starting_city)
+    starting_city = data.get('startingCity')
+    mutation_rate = data.get('mutationRate')
+    generation = data.get('generations')
+    target_city = data.get('targetCity')
+    allCities = data.get('allCities')
     
+    print(target_city)
+    print(mutation_rate)
+    print(generation)
+    print(starting_city)
+    print(allCities)
     if data is None:
         return jsonify({"error": "No JSON data received"}), 400
 
