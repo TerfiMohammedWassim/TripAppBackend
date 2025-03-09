@@ -1,10 +1,13 @@
 from flask import Flask, request, jsonify
 import json
+<<<<<<< HEAD
 import random
 import math
 import matplotlib.pyplot as plt
 import numpy as np
 
+=======
+>>>>>>> 5613296fbe95b9f2bd9a8f223c824987ce93a065
 
 app = Flask(__name__)
 
@@ -101,6 +104,7 @@ def genetic_algorithm(cities, population_size, generations, mutation_rate, start
 # Route Flask pour résoudre le problème
 @app.route('/solve', methods=['POST'])
 def solve():
+<<<<<<< HEAD
     try:
         data = request.get_json()
         if data is None:
@@ -144,6 +148,23 @@ def solve():
     except Exception as e:
         print(f"❌ Erreur: {str(e)}")
         return jsonify({"error": f"An error occurred: {str(e)}"}), 500
+=======
+    data = request.get_json()
+    print(data)
+    starting_city = data.get('startingCity')
+    mutation_rate = data.get('mutationRate')
+    generation = data.get('generations')
+    target_city = data.get('targetCity')
+    allCities = data.get('allCities')
+    
+    print(target_city)
+    print(mutation_rate)
+    print(generation)
+    print(starting_city)
+    print(allCities)
+    if data is None:
+        return jsonify({"error": "No JSON data received"}), 400
+>>>>>>> 5613296fbe95b9f2bd9a8f223c824987ce93a065
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
