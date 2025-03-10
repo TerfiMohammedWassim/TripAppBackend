@@ -3,171 +3,290 @@ import json
 import random
 import math
 import numpy as np
+from collections import defaultdict
 
 app = Flask(__name__)
 
-def distance(city1, city2):
-    dx = city1["x"] - city2["x"]
-    dy = city1["y"] - city2["y"]
-    return math.sqrt(dx ** 2 + dy ** 2)
-
-def total_distance(route, cities):
-    total = sum(distance(cities[route[i]], cities[route[i + 1]]) for i in range(len(route) - 1))
-    total += distance(cities[route[-1]], cities[route[0]])
-    return total
-
-def selection(population, cities, k=5):
-    selected = random.sample(population, k)
-    return min(selected, key=lambda route: total_distance(route, cities))
-
-def crossover(parent1, parent2):
-    size = len(parent1)
-    start, end = sorted(random.sample(range(1, size), 2))
-    child = [-1] * size
-    
-    child[0] = parent1[0]
-    
-    child[start:end] = parent1[start:end]
-    
-    fill_values = [city for city in parent2 if city not in child]
-    index = 0
-    for i in range(1, size):
-        if child[i] == -1:
-            child[i] = fill_values[index]
-            index += 1
-    
-    return child
-
-def mutate(route, mutation_rate):
-    if random.random() < mutation_rate:
-        i, j = random.sample(range(1, len(route)), 2)
-        route[i], route[j] = route[j], route[i]
-    return route
-
-def initial_population(size, num_cities, start_city_index):
-    population = []
-    
-    for _ in range(size):
-        other_cities = list(range(num_cities))
-        other_cities.remove(start_city_index)
-        random.shuffle(other_cities)
-        route = [start_city_index] + other_cities
-        population.append(route)
+class GeneticAlgorithm:
+    def __init__(self, cities, starting_city, mutation_rate=0.01, population_size=100, generations=1000):
+        self.cities = cities
+        self.starting_city = starting_city
+        self.mutation_rate = float(mutation_rate)
+        self.population_size = int(population_size)
+        self.generations = int(generations)
         
-    return population
-
-def genetic_algorithm(cities, population_size=100, generations=100, mutation_rate=0.01, start_city_index=0):
-    print("Starting genetic algorithm...")
-    
-    population_size = int(population_size)
-    generations = int(generations)
-    mutation_rate = float(mutation_rate)
-    num_cities = len(cities)
-    
-    population = initial_population(population_size, num_cities, start_city_index)
-    
-    best_route_overall = None
-    best_distance_overall = float('inf')
-    
-    for generation in range(generations):
-        new_population = []
         
-        for _ in range(population_size):
-            parent1 = selection(population, cities)
-            parent2 = selection(population, cities)
+        self.city_names = set([city['name'] for city in cities])
+        self.city_names.add(starting_city['name'])
+        
+        self.city_dict = {city['name']: city for city in cities}
+        if starting_city['name'] not in self.city_dict:
+            self.city_dict[starting_city['name']] = starting_city
+    
+    def get_city_by_name(self, name):
+        if name == self.starting_city['name']:
+            return self.starting_city
+        return self.city_dict.get(name)
+    
+    def create_individual(self):
+        individual = {}
+        for target_city in self.city_names:
+            if target_city == self.starting_city['name']:
+                continue
+                
+            path = [self.starting_city['name']]
+            current_city = self.starting_city
             
-            child = crossover(parent1, parent2)
+            visited = {self.starting_city['name']}
             
-            child = mutate(child, mutation_rate)
+            reached_target = False
             
-            new_population.append(child)
+            for _ in range(len(self.city_names) * 2): 
+                if not current_city or 'goingTo' not in current_city or not current_city['goingTo']:
+                    break
+                    
+                options = current_city['goingTo']
+                if not options:
+                    break
+                    
+                
+                valid_options = [opt for opt in options if opt['name'] not in visited]
+                if not valid_options:
+                    break
+                
+                next_city_data = random.choice(valid_options)
+                next_city_name = next_city_data['name']
+                path.append(next_city_name)
+                visited.add(next_city_name)
+
+                if next_city_name == target_city:
+                    reached_target = True
+                    break
+                    
+                current_city = self.get_city_by_name(next_city_name)
+            
+            if reached_target:
+                individual[target_city] = path
         
-        population = new_population
-        
-        current_best_route = min(population, key=lambda route: total_distance(route, cities))
-        current_best_distance = total_distance(current_best_route, cities)
-        
-        if current_best_distance < best_distance_overall:
-            best_distance_overall = current_best_distance
-            best_route_overall = current_best_route
-        
-        if generation % 10 == 0:
-            print(f"Generation {generation}: Best distance = {current_best_distance:.2f}")
+        return individual
     
-    best_route_names = [cities[i]["name"] for i in best_route_overall]
+    def create_initial_population(self):
+        population = []
+        for _ in range(self.population_size):
+            individual = self.create_individual()
+            population.append(individual)
+        return population
     
-    print("✅ Algorithm completed!")
-    print(f"🔝 Best route found: {best_route_names}")
-    print(f"📏 Total distance: {best_distance_overall:.2f}")
+    def calculate_path_cost(self, path):
+        if not path or len(path) <= 1:
+            return float('inf')
+            
+        total_cost = 0
+        for i in range(len(path) - 1):
+            current_city_name = path[i]
+            next_city_name = path[i + 1]
+            
+            current_city = self.get_city_by_name(current_city_name)
+            
+            if not current_city or 'goingTo' not in current_city:
+                return float('inf')
+                
+            connection = next((conn for conn in current_city['goingTo'] if conn['name'] == next_city_name), None)
+            
+            if not connection:
+                return float('inf')
+                
+            total_cost += connection['cost']
+        
+        return total_cost
     
-    return best_route_names, best_distance_overall
+    def calculate_fitness(self, individual):
+        if not individual:
+            return 0
+            
+        fitness = 0
+        
+        num_cities_reached = len(individual)
+        fitness += num_cities_reached * 10  
+        
+        total_inverse_cost = 0
+        for target, path in individual.items():
+            path_cost = self.calculate_path_cost(path)
+            if path_cost < float('inf'):
+                total_inverse_cost += 100.0 / (path_cost + 1) 
+        
+        fitness += total_inverse_cost
+        
+        return fitness
+    
+    def select_parent(self, population, fitnesses):
+        tournament_size = 3
+        tournament = random.sample(range(len(population)), tournament_size)
+        tournament_fitnesses = [fitnesses[i] for i in tournament]
+        winner_idx = tournament[tournament_fitnesses.index(max(tournament_fitnesses))]
+        return population[winner_idx]
+    
+    def crossover(self, parent1, parent2):
+        child = {}
+        
+        all_targets = set(parent1.keys()) | set(parent2.keys())
+        
+        for target in all_targets:
+            if target in parent1 and target in parent2:
+                cost1 = self.calculate_path_cost(parent1[target])
+                cost2 = self.calculate_path_cost(parent2[target])
+                
+                if cost1 <= cost2:
+                    child[target] = parent1[target].copy()
+                else:
+                    child[target] = parent2[target].copy()
+            elif target in parent1:
+                child[target] = parent1[target].copy()
+            elif target in parent2:
+                child[target] = parent2[target].copy()
+        
+        return child
+    
+    def mutate(self, individual):
+        if random.random() > self.mutation_rate or not individual:
+            return individual
+            
+        mutated = {}
+        for target, path in individual.items():
+            if random.random() < self.mutation_rate and len(path) > 2:
+                mutation_point = random.randint(0, len(path) - 2)
+                
+                new_path = path[:mutation_point + 1]
+                current_city_name = new_path[-1]
+                current_city = self.get_city_by_name(current_city_name)
+                
+                visited = set(new_path)
+                reached_target = False
+                
+                for _ in range(len(self.city_names) * 2):  
+                    if not current_city or 'goingTo' not in current_city or not current_city['goingTo']:
+                        break
+                        
+                    options = current_city['goingTo']
+                    if not options:
+                        break
+                        
+                    valid_options = [opt for opt in options if opt['name'] not in visited]
+                    if not valid_options:
+                        break
+                    
+                    next_city_data = random.choice(valid_options)
+                    next_city_name = next_city_data['name']
+                    new_path.append(next_city_name)
+                    visited.add(next_city_name)
+                    
+                    if next_city_name == target:
+                        reached_target = True
+                        break
+                        
+                    current_city = self.get_city_by_name(next_city_name)
+                
+              
+                if reached_target:
+                    mutated[target] = new_path
+                else:
+                    mutated[target] = path.copy()
+            else:
+                mutated[target] = path.copy()
+        
+        return mutated
+    
+    def evolve(self):
+        
+        population = self.create_initial_population()
+        best_individual = None
+        best_fitness = -1
+        
+        for generation in range(self.generations):
+            # Calculate fitness for each individual
+            fitnesses = [self.calculate_fitness(individual) for individual in population]
+            
+            # Find the best individual
+            max_fitness_idx = fitnesses.index(max(fitnesses))
+            current_best = population[max_fitness_idx]
+            current_best_fitness = fitnesses[max_fitness_idx]
+            
+            # Update overall best if needed
+            if current_best_fitness > best_fitness:
+                best_individual = current_best
+                best_fitness = current_best_fitness
+            
+            # Create the next generation
+            new_population = []
+            
+            # Keep the best individual (elitism)
+            new_population.append(current_best)
+            
+            # Fill the rest of the population through selection, crossover, and mutation
+            while len(new_population) < self.population_size:
+                parent1 = self.select_parent(population, fitnesses)
+                parent2 = self.select_parent(population, fitnesses)
+                child = self.crossover(parent1, parent2)
+                child = self.mutate(child)
+                new_population.append(child)
+            
+            population = new_population
+        
+        # Format results with costs for each path
+        result = {}
+        if best_individual:
+            for target, path in best_individual.items():
+                cost = self.calculate_path_cost(path)
+                if cost < float('inf'):
+                    result[target] = {
+                        "path": path,
+                        "cost": cost,
+                        "pathLength": len(path)
+                    }
+        
+        return result
 
 @app.route('/solve', methods=['POST'])
 def solve():
     try:
         data = request.get_json()
-        if data is None:
-            return jsonify({"error": "No JSON data received"}), 400
-
-        starting_city = data.get('startingCity')
-        mutation_rate = float(data.get('mutationRate', 0.01))
-        generations = int(data.get('generations', 100))
-        population_size = int(data.get('populationSize', 100))
+        
+        # Extract parameters
+        mutation_rate = data.get("mutationRate", "0.01")
+        generations = data.get("generations", "1000")
+        population_size = data.get("population", "100")
+        starting_city = data.get("startingCity")
         all_cities = data.get('allCities', [])
         
-        # Validate input data
+        # Validate input
         if not starting_city:
             return jsonify({"error": "Starting city is required"}), 400
         if not all_cities:
             return jsonify({"error": "City list is required"}), 400
-            
-        cities = {}
-        for i, city in enumerate(all_cities):
-            cities[i] = {
-                "name": city["name"],
-                "x": city["x"],
-                "y": city["y"]
-            }
         
-       
-        start_city_index = None
-        for i, city in cities.items():
-            if city["name"].strip().lower() == starting_city["name"].strip().lower():
-                start_city_index = i
-                break
-        
-        if start_city_index is None:
-            return jsonify({"error": f"Starting city '{starting_city['name']}' not found in city list"}), 400
-        
-        
-        best_route_names, best_distance = genetic_algorithm(
-            cities=cities, 
-            population_size=population_size, 
-            generations=generations, 
-            mutation_rate=mutation_rate, 
-            start_city_index=start_city_index
+        # Initialize and run genetic algorithm
+        ga = GeneticAlgorithm(
+            cities=all_cities,
+            starting_city=starting_city,
+            mutation_rate=mutation_rate,
+            population_size=population_size,
+            generations=generations
         )
         
-       
-        route_coordinates = []
-        for city_name in best_route_names:
-            city_index = next(i for i, city in cities.items() if city["name"] == city_name)
-            route_coordinates.append({
-                "name": city_name,
-                "x": cities[city_index]["x"],
-                "y": cities[city_index]["y"],
-                "count" : cities[city_index]["count"]
-            })
+        best_paths = ga.evolve()
         
-        return jsonify({
-            "bestRoute": best_route_names,
-            "totalDistance": round(best_distance, 2),
-            "routeCoordinates": route_coordinates
-        })
-
+        # Prepare the result
+        result = {
+            "bestPaths": best_paths,
+            "totalCitiesReached": len(best_paths),
+            "totalCities": len(ga.city_names) - 1  # Subtract 1 to exclude starting city
+        }
+        
+        return jsonify(result), 200
+    
     except Exception as e:
-        print(f"❌ Error: {str(e)}")
-        return jsonify({"error": f"An error occurred: {str(e)}"}), 500
+        print(f'An exception occurred: {str(e)}')
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
