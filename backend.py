@@ -22,12 +22,15 @@ def solve():
 
         starting_city = random.choice(all_cities)  
         
-        best_route, best_distance = genetic_algorithm(all_cities, starting_city, mutation_rate, generations, population_size)
+        best_route, best_distance,bestFitness = genetic_algorithm(all_cities, starting_city, mutation_rate, generations, population_size)
         
         result = {
             "bestPaths": best_route,
             "totalCitiesReached": np.round(1 / best_distance, 2),
             "totalCities": len(all_cities), 
+            "bestFitness": bestFitness,
+            "bestDistance": best_distance,
+            "generations": generations
         }
         
         

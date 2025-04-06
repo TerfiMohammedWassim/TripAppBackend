@@ -83,6 +83,6 @@ def genetic_algorithm(all_cities, starting_city, mutation_rate=0.01, generations
         best_distance += calculate_distance(city1, city2)
     best_distance += calculate_distance(city_dict[best_route[-1]], city_dict[best_route[0]])
     
-    return best_route, best_distance
+    return best_route, best_distance,best_fitness
 
 
